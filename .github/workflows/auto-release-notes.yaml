@@ -53,7 +53,7 @@ jobs:
           RELEASE_NOTES_FILE: ${{ secrets.RELEASE_NOTES_FILE }}
         run: |
           git add "$RELEASE_NOTES_FILE"
-          if git diff --cached --quiet HEAD -- "$RELEASE_NOTES_FILE"; then
+          if git diff --quiet origin/main -- "$RELEASE_NOTES_FILE"; then
             echo "files_are_same=true" >> $GITHUB_OUTPUT
           else
             echo "files_are_same=false" >> $GITHUB_OUTPUT
