@@ -23,40 +23,44 @@ jobs:
       - name: Install dependencies
         run: pip install requests pandas pyyaml jq
 
-      - name: Run auto-release-notes.py script
+      - name: Prepare branch
+        id: prepare_branch
         run: |
-          IFS=',' read -r APP_ID APP_SECRET URL <<< "${{ secrets.FEISHU_SECRET }}"
-          FILENAME="${{ secrets.RELEASE_NOTES_FILE }}"
-          export APP_ID APP_SECRET URL FILENAME
+          DATE=$(date +%Y%m%d)
+          BRANCH="update-rel-notes-$DATE"
+          git fetch origin "$BRANCH" || true
+
+          if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+            git checkout -b "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -b "$BRANCH"
+          fi
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Run auto-release-notes.py script
+        env:
+          FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
+          RELEASE_NOTES_FILE: ${{ secrets.RELEASE_NOTES_FILE }}
+        run: |
+          IFS=',' read -r APP_ID APP_SECRET URL <<< "$FEISHU_SECRET"
+          export APP_ID APP_SECRET URL
+          export FILENAME="${RELEASE_NOTES_FILE}"
           python scripts/auto-release-notes.py
 
-      - name: Check and push
+      - name: Check if release notes file changed and commit
         id: check_changes
         env:
           RELEASE_NOTES_FILE: ${{ secrets.RELEASE_NOTES_FILE }}
         run: |
-          # 先暂存文件，避免未跟踪文件影响判断
           git add "$RELEASE_NOTES_FILE"
-          # 判断相对于 main 分支是否有变更
-          if git diff --cached --quiet origin/main -- "docs/zh/docs/rel-notes.md"; then
+          if git diff --cached --quiet HEAD -- "$RELEASE_NOTES_FILE"; then
             echo "files_are_same=true" >> $GITHUB_OUTPUT
           else
             echo "files_are_same=false" >> $GITHUB_OUTPUT
             git config --global user.name "github-actions[bot]"
             git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            DATE=$(date +%Y%m%d)
-            BRANCH="update-rel-notes-$DATE"
-            git fetch origin "$BRANCH" || true
-            
-            if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
-              git checkout -b "$BRANCH" "origin/$BRANCH"
-            else
-              git checkout -b "$BRANCH"
-            fi
-            
             git commit -m "Update rel-notes.md via automation"
-            git push -u origin "$BRANCH"
-            echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+            git push -u origin "${{ steps.prepare_branch.outputs.branch }}"
           fi
 
       - name: Create Pull Request
