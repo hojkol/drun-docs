@@ -72,5 +72,5 @@ jobs:
           title: "Automated update of rel-notes.md"
           body: "This PR updates rel-notes.md automatically."
           base: main
-          branch: ${{ steps.check_changes.outputs.branch }}
+          branch: ${{ steps.prepare_branch.outputs.branch }}
           # delete-branch: true
