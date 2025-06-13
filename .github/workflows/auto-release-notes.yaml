@@ -46,7 +46,14 @@ jobs:
             git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
             DATE=$(date +%Y%m%d)
             BRANCH="update-rel-notes-$DATE"
-            git checkout -b "$BRANCH"
+            git fetch origin "$BRANCH" || true
+            
+            if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+              git checkout -b "$BRANCH" "origin/$BRANCH"
+            else
+              git checkout -b "$BRANCH"
+            fi
+            
             git commit -m "Update rel-notes.md via automation"
             git push -u origin "$BRANCH"
             echo "branch=$BRANCH" >> $GITHUB_OUTPUT
