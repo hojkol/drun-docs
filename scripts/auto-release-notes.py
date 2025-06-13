@@ -167,13 +167,13 @@ def get_release_info(data, filename='rel-notes.md'):
 
     # 定义模板
     header_template = Template('''---
-    hide:
-    - toc
-    ---
+hide:
+- toc
+---
 
-    # Release Notes
+# Release Notes
 
-    本页列出 d.run 各项功能的一些重要变更。
+本页列出 d.run 各项功能的一些重要变更。
 
     ''')
 
@@ -230,7 +230,7 @@ def parse_feishu_url(url):
     return node_token, table_id, view_id
 
 if __name__ == "__main__":
-    file_out_name = os.environ.get("FILE_OUT_NAME")
+    file_out_name = os.environ.get("FILENAME")
     app_id = os.environ.get("APP_ID")
     app_secret = os.environ.get("APP_SECRET")
     url = os.environ.get("URL")

@@ -27,29 +27,33 @@ jobs:
         run: |
           IFS=',' read -r APP_ID APP_SECRET URL <<< "${{ secrets.FEISHU_SECRET }}"
           FILENAME="${{ secrets.RELEASE_NOTES_FILE }}"
-          export APP_ID APP_SECRET URL FILENAME  # 导出为环境变量
+          export APP_ID APP_SECRET URL FILENAME
           python scripts/auto-release-notes.py
 
-      - name: Check if changes, commit and push
-        id: compare
+      - name: Check and push
+        id: check_changes
+        env:
+          RELEASE_NOTES_FILE: ${{ secrets.RELEASE_NOTES_FILE }}
         run: |
-          if git diff --quiet origin/main -- docs/zh/docs/rel-notes.md; then
+          # 先暂存文件，避免未跟踪文件影响判断
+          git add "$RELEASE_NOTES_FILE"
+          # 判断相对于 main 分支是否有变更
+          if git diff --cached --quiet origin/main -- "docs/zh/docs/rel-notes.md"; then
             echo "files_are_same=true" >> $GITHUB_OUTPUT
-            echo "No changes to commit"
           else
             echo "files_are_same=false" >> $GITHUB_OUTPUT
-            # git config --global user.name "github-actions[bot]"
-            # git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
             DATE=$(date +%Y%m%d)
             BRANCH="update-rel-notes-$DATE"
-            git checkout -b "$BRANCH" || git checkout "$BRANCH"
+            git checkout -b "$BRANCH"
             git commit -m "Update rel-notes.md via automation"
-            git push -u origin update-rel-notes --force
+            git push -u origin "$BRANCH"
             echo "branch=$BRANCH" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Pull Request
-        if: steps.compare.outputs.files_are_same == 'false'
+        if: steps.check_changes.outputs.files_are_same == 'false'
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -57,5 +61,5 @@ jobs:
           title: "Automated update of rel-notes.md"
           body: "This PR updates rel-notes.md automatically."
           base: main
-          branch: ${{ steps.compare.outputs.branch }}
+          branch: ${{ steps.check_changes.outputs.branch }}
           # delete-branch: true
