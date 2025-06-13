@@ -156,36 +156,54 @@ def get_release_Dict(data):
 def get_release_info(data, filename='rel-notes.md'):
     items = get_items(data)
     result = get_release_Dict(items)
+    from string import Template
+
     emoji_map = {
         '新功能': '🚀 新功能',
         '增强优化': '⚡ 增强优化',
         '故障修复': '🐛 故障修复',
         '无更新类型': ''
     }
+
+    # 定义模板
+    header_template = Template('''---
+    hide:
+    - toc
+    ---
+
+    # Release Notes
+
+    本页列出 d.run 各项功能的一些重要变更。
+
+    ''')
+
+    pub_date_template = Template('## $pub_date\n\n')
+    module_version_template = Template('### $module $version\n\n')
+    update_type_template = Template('#### $emoji_title\n\n')
+    entry_with_baseline_template = Template('- [$primary_func] $baseline')
+    entry_without_baseline_template = Template('- [$primary_func]')
+
     lines = []
-    lines.append('---')
-    lines.append('hide:')
-    lines.append(' - toc')
-    lines.append('---\n')
-    lines.append('# Release Notes\n')
-    lines.append('本页列出 d.run 各项功能的一些重要变更。\n')
+    lines.append(header_template.substitute())
+
     for pub_date, modules in result.items():
-        lines.append(f'## {pub_date}\n')
+        lines.append(pub_date_template.substitute(pub_date=pub_date))
         for module, versions in modules.items():
             for version, update_types in versions.items():
-                lines.append(f'### {module} {version}\n')
+                lines.append(module_version_template.substitute(module=module, version=version))
                 for update_type in ['新功能', '增强优化', '故障修复', '无更新类型']:
                     if update_type in update_types:
                         entries = update_types[update_type]
                         if update_type != '无更新类型':
-                            lines.append(f'#### {emoji_map[update_type]}\n')
+                            lines.append(update_type_template.substitute(emoji_title=emoji_map[update_type]))
                         for primary_func, entry in entries:
-                            baseline = entry['基线参数']
+                            baseline = entry.get('基线参数', '')
                             if baseline:
-                                lines.append(f'- [{primary_func}] {baseline}')
+                                lines.append(entry_with_baseline_template.substitute(primary_func=primary_func, baseline=baseline))
                             else:
-                                lines.append(f'- [{primary_func}]')
-                        lines.append('')
+                                lines.append(entry_without_baseline_template.substitute(primary_func=primary_func))
+                        lines.append('')  # 空行分隔
+
     md_content = '\n'.join(lines)
     try:
         with open(filename, 'w', encoding='utf-8') as f:
@@ -212,11 +230,11 @@ def parse_feishu_url(url):
     return node_token, table_id, view_id
 
 if __name__ == "__main__":
-    file_out_name = 'docs/zh/docs/rel-notes.md'
-
+    file_out_name = os.environ.get("FILE_OUT_NAME")
     app_id = os.environ.get("APP_ID")
     app_secret = os.environ.get("APP_SECRET")
     url = os.environ.get("URL")
+    
     node_token, table_id, view_id = parse_feishu_url(url) if url else (None, None, None)
     if not all([app_id, app_secret, node_token, table_id, view_id]):
         logging.error("配置信息不完整，程序退出")

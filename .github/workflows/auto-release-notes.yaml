@@ -23,78 +23,39 @@ jobs:
       - name: Install dependencies
         run: pip install requests pandas pyyaml jq
 
-      - name: Switch to main branch
-        run: git checkout main
-
       - name: Run auto-release-notes.py script
         run: |
           IFS=',' read -r APP_ID APP_SECRET URL <<< "${{ secrets.FEISHU_SECRET }}"
-          export APP_ID APP_SECRET URL  # 导出为环境变量
+          FILENAME="${{ secrets.RELEASE_NOTES_FILE }}"
+          export APP_ID APP_SECRET URL FILENAME  # 导出为环境变量
           python scripts/auto-release-notes.py
 
-      - name: Compare rel-notes.md changes
+      - name: Check if changes, commit and push
         id: compare
         run: |
-          git fetch origin main
           if git diff --quiet origin/main -- docs/zh/docs/rel-notes.md; then
             echo "files_are_same=true" >> $GITHUB_OUTPUT
+            echo "No changes to commit"
           else
             echo "files_are_same=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Commit and push changes if any
-        if: steps.compare.outputs.files_are_same == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b update-rel-notes || git checkout update-rel-notes
-          git add docs/zh/docs/rel-notes.md
-          if ! git diff --cached --quiet; then
+            # git config --global user.name "github-actions[bot]"
+            # git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            DATE=$(date +%Y%m%d)
+            BRANCH="update-rel-notes-$DATE"
+            git checkout -b "$BRANCH" || git checkout "$BRANCH"
             git commit -m "Update rel-notes.md via automation"
             git push -u origin update-rel-notes --force
-          else
-            echo "No changes to commit"
+            echo "branch=$BRANCH" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Pull Request
         if: steps.compare.outputs.files_are_same == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_TITLE="Automated update of rel-notes.md"
-          PR_BODY="This PR updates rel-notes.md automatically."
-          PR_BRANCH="update-rel-notes"
-          REPO="${{ github.repository }}"
-          OWNER="${{ github.repository_owner }}"
-
-          existing_pr=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/$REPO/pulls?head=$OWNER:$PR_BRANCH&state=open" | jq '. | length')
-
-          if [ "$existing_pr" -gt 0 ]; then
-            echo "Pull request already exists. Skipping creation."
-            exit 0
-          fi
-
-          response=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/pulls" \
-            -d @- <<EOF
-          {
-            "title": "$PR_TITLE",
-            "head": "$PR_BRANCH",
-            "base": "main",
-            "body": "$PR_BODY"
-          }
-          EOF
-          )
-
-          pr_url=$(echo "$response" | jq -r '.html_url')
-          if [ "$pr_url" = "null" ]; then
-            echo "Failed to create pull request:"
-            echo "$response"
-            exit 1
-          else
-            echo "Pull request created: $pr_url"
-          fi
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update rel-notes.md via automation"
+          title: "Automated update of rel-notes.md"
+          body: "This PR updates rel-notes.md automatically."
+          base: main
+          branch: ${{ steps.compare.outputs.branch }}
+          # delete-branch: true
